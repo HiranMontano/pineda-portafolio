@@ -691,23 +691,56 @@ HTML = f"""
 </div>
 """
 
-JS = """
+# ── Inject JS into the PARENT document from the iframe ──────────────────────
+# components.html() runs inside a sandboxed iframe whose document has no
+# .reveal elements. The fix: create a <script> in window.parent.document so
+# the IntersectionObserver runs in the same context as the HTML, with the
+# correct viewport for intersection calculations.
+JS_INJECT = """
 <script>
-(function() {
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.12 });
+(function () {
+  function inject() {
+    try {
+      var pd = window.parent.document;
 
-  document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+      // Build the observer script that will run in the parent document
+      var s = pd.createElement('script');
+      // Note: inside this injected script, "document" IS the parent document
+      // because pd.head.appendChild(s) executes it in the parent context.
+      s.textContent = [
+        '(function(){',
+        '  var obs = new IntersectionObserver(function(entries){',
+        '    entries.forEach(function(e){',
+        '      if(e.isIntersecting){',
+        '        e.target.classList.add("visible");',
+        '        obs.unobserve(e.target);',
+        '      }',
+        '    });',
+        '  },{threshold:0.12});',
+        '',
+        '  function init(){',
+        '    var els = document.querySelectorAll(".reveal");',
+        '    if(!els.length){ setTimeout(init,200); return; }',
+        '    els.forEach(function(el){ obs.observe(el); });',
+        '  }',
+        '',
+        '  init();',
+        '})();'
+      ].join("\\n");
+
+      pd.head.appendChild(s);
+    } catch (err) {
+      // Cross-origin guard or not-yet-ready — retry
+      setTimeout(inject, 400);
+    }
+  }
+
+  // Give Streamlit time to flush the st.markdown HTML into the DOM
+  setTimeout(inject, 700);
 })();
 </script>
 """
 
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(HTML, unsafe_allow_html=True)
-components.html(JS, height=0)
+components.html(JS_INJECT, height=0)
