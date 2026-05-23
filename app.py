@@ -716,6 +716,15 @@ FULL_HTML = """<!DOCTYPE html>
   }, { threshold: 0.12 });
 
   document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+
+  // ── Anchor nav: srcdoc iframes no disparan scroll nativo con href="#id" ──
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var target = document.getElementById(this.getAttribute('href').slice(1));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 </script>
 </body>
 </html>"""
